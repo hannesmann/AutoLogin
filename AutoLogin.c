@@ -1,6 +1,8 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "tlhelp32.h"
 
 DWORD processId;
 char *account;
@@ -54,11 +56,40 @@ void AL_SendInfo(HANDLE hWnd)
 	AL_SendKey(hWnd, '\n');
 }
 
+BOOL AL_FindChild(PDWORD childId) 
+{
+	HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+	PROCESSENTRY32 pe32;
+	ZeroMemory(&pe32, sizeof(pe32));
+	pe32.dwSize = sizeof(PROCESSENTRY32);
+
+	if(!Process32First(snapshot, &pe32)) {
+		CloseHandle(snapshot);
+		return FALSE;
+	}
+
+	do {
+		if(pe32.th32ParentProcessID == processId) {
+			CloseHandle(snapshot);
+			*childId = pe32.th32ProcessID;
+			return TRUE;
+		}
+	}
+	while(Process32Next(snapshot, &pe32));
+
+	CloseHandle(snapshot);
+	return FALSE;
+}
+
 BOOL CALLBACK AL_Window_Callback(HWND hWnd, LONG lParam) {
     if (IsWindowVisible(hWnd)) {
-    	DWORD testId;
+    	DWORD testId, childId;
+
 		GetWindowThreadProcessId(hWnd, &testId);
-		if (testId == processId) {
+		BOOL foundChild = AL_FindChild(&childId);
+		
+		if (testId == processId || (foundChild && testId == childId)) {
 			Sleep(delay);
 			AL_SendInfo(hWnd);
 			exit(0);
